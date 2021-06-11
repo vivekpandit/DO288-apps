@@ -5,15 +5,15 @@ pipeline {
     }
     agent {
       node {
-        //TODO: Add label for Node.js jenkins agent
-      }
+        label 'nodejs' 
+     }
     }
 
     environment {
         //TODO: Edit these vars as per your env
-        DEV_PROJECT = "youruser-books-dev"
-        STAGE_PROJECT = "youruser-books-stage"
-        APP_GIT_URL = "https://github.com/youruser/DO288-apps"
+        DEV_PROJECT = "knxdpu-books-dev"
+        STAGE_PROJECT = "knxdpu-books-stage"
+        APP_GIT_URL = "https://github.com/vivekpandit/DO288-apps"
         NEXUS_SERVER = "http://nexus-common.apps.cluster.domain.example.com/repository/nodejs"
 
         // DO NOT CHANGE THE GLOBAL VARS BELOW THIS LINE
@@ -58,8 +58,20 @@ pipeline {
                    '''
 
                 echo '### Creating a new app in DEV env ###'
-                //TODO: Create a new app and expose the service
-            }
+              
+	       	sh '''
+		oc project ${DEV_PROJECT}
+		oc new-app --as-deployment-config --name books nodejs:12~${APP_GIT_URL} \
+		--build-env npm_config_registry=${NEXUS_SERVER} \
+		--context-dir ${APP_NAME}
+		oc expose svc/${APP_NAME}
+
+
+
+
+
+            
+               }
         }
 
         stage('Wait for S2I build to complete') {
@@ -98,8 +110,13 @@ pipeline {
             steps {
                 timeout(time: 60, unit: 'MINUTES') {
                     input message: "Promote to Staging?"
+	        script {
+			openshift.withCluster() {
+			openshift.tag("${DEV_PROJECT}/books:latest", "${STAGE_PROJECT}/books:stage")
+			}			
+		}		
+	
                 }
-                //TODO: Tag the books:latest image stream as books:stage
             }
         }
 
@@ -114,7 +131,13 @@ pipeline {
 
                 echo '### Creating a new app in Staging ###'
                 //TODO: Create a new app in stage using the books:stage image stream and expose the service
-            }
+		sh '''
+		oc project ${STAGE_PROJECT}
+		oc new-app --as-deployment-config --name books -i books:stage
+		oc expose svc/${APP_NAME}
+		'''	            
+
+	    }
         }
 
         stage('Wait for deployment in Staging') {
